@@ -9,6 +9,8 @@ from src.constants import (
 )
 from src.constants import MAX_CHARS_PER_REPLY_MSG, INACTIVATE_THREAD_PREFIX
 
+import io
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -119,3 +121,10 @@ def should_block(guild: Optional[discord.Guild]) -> bool:
         logger.info(f"Guild {guild} not allowed")
         return True
     return False
+
+def base64_to_bytes(image: str):
+    """Convert base64 image to python io.BytesIO object."""
+    return io.BytesIO(base64.b64decode(image))
+
+def discord_image(image: str) -> discord.File:
+    return discord.File(base64_to_bytes(image), "dalle_imagine.png")

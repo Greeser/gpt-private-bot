@@ -5,8 +5,8 @@ from typing import Optional, List
 import discord
 import aiohttp
 from src.base import Message
-from src.utils import split_into_shorter_messages, logger, close_thread
-from src.constants import OPENAI_API_KEY, OPENAI_API_URL, OPENAI_MODEL, MAX_CHARS_PER_REPLY_MSG
+from src.utils import split_into_shorter_messages, logger, close_thread, discord_image
+from src.constants import OPENAI_API_KEY, OPENAI_API_URL, OPENAI_MODEL, MAX_CHARS_PER_REPLY_MSG, DALLE_API_URL
 
 
 class CompletionResult(Enum):
@@ -21,6 +21,11 @@ class CompletionData:
     reply_text: Optional[str]
     status_text: Optional[str]
 
+@dataclass
+class ImageCompletionData:
+    status: CompletionResult
+    image64: Optional[str]
+    status_text: Optional[str]
 
 async def generate_completion_response(
     messages: List[Message],
@@ -51,6 +56,37 @@ async def generate_completion_response(
             status=CompletionResult.ERROR, reply_text=None, status_text=str(e)
         )
 
+async def generate_image_response(
+    prompt: Message,
+) -> CompletionData:
+    try:
+        async with aiohttp.ClientSession() as session:
+            prompt = prompt.render().get('content', '')
+            async with session.post(
+                    url=DALLE_API_URL,
+                    json={
+                        'prompt': prompt,
+                        'n': 1,
+                        'size': '256x256',
+                        'response_format': 'b64_json'
+                    },
+                    auth=aiohttp.BasicAuth("", OPENAI_API_KEY)
+                    ) as r:
+                if r.status == 200:
+                    js = await r.json()
+                    reply = js['data'][0]['b64_json']
+                    return ImageCompletionData(status=CompletionResult.OK, image64=reply, status_text=None)
+                else:
+                    js = await r.json()
+                    code = js['error']['code']
+                    status = CompletionResult.TOO_LONG if code == 'context_length_exceeded' else CompletionResult.ERROR
+                    return ImageCompletionData(status=status, image64=None, status_text=js)
+    except Exception as e:
+        logger.exception(e)
+        return ImageCompletionData(
+            status=CompletionResult.ERROR, image64=None, status_text=str(e)
+        )
+
 
 async def process_response(
     thread: discord.Thread, response_data: CompletionData
@@ -78,6 +114,32 @@ async def process_response(
         await close_thread(thread)
     else:
         await thread.send(
+            embed=discord.Embed(
+                description=f"**Error** - {status_text}",
+                color=discord.Color.yellow(),
+            )
+        )
+
+async def process_image_response(
+    channel: discord.TextChannel,
+    response_data: ImageCompletionData
+):
+    status = response_data.status
+    image64 = response_data.image64
+    status_text = response_data.status_text
+    if status is CompletionResult.OK:
+        if not image64:
+            await channel.send(
+                embed=discord.Embed(
+                    description=f"**Invalid response** - empty response",
+                    color=discord.Color.yellow(),
+                )
+            )
+        else:
+            file = discord_image(image64)
+            await channel.send(file=file)
+    else:
+        await channel.send(
             embed=discord.Embed(
                 description=f"**Error** - {status_text}",
                 color=discord.Color.yellow(),

@@ -20,7 +20,7 @@ from src.utils import (
     is_last_message_stale,
     discord_message_to_message,
 )
-from src.completion import generate_completion_response, process_response
+from src.completion import generate_completion_response, process_response, generate_image_response, process_image_response
 import src.alive
 
 logging.basicConfig(
@@ -36,6 +36,9 @@ tree = discord.app_commands.CommandTree(client)
 
 @client.event
 async def on_ready():
+    for guild in client.guilds:
+        logger.info(f"Connected to {guild.name} {guild.id}")
+        await tree.sync(guild=guild)
     logger.info(f"We have logged in as {client.user}. Invite URL: {BOT_INVITE_URL}")
 
 
@@ -194,6 +197,71 @@ async def on_message(message: DiscordMessage):
             )
     except Exception as e:
         logger.exception(e)
+
+# /imagine message:
+@tree.command(name="imagine", description="Call DALL-E model to imagine")
+@discord.app_commands.checks.has_permissions(send_messages=True)
+@discord.app_commands.checks.has_permissions(view_channel=True)
+@discord.app_commands.checks.bot_has_permissions(send_messages=True)
+@discord.app_commands.checks.bot_has_permissions(view_channel=True)
+async def imagine_command(int: discord.Interaction, message: str):
+    try:
+        # only support creating thread in text channel
+        if not isinstance(int.channel, discord.TextChannel):
+            return
+
+        # block servers not in allow list
+        if should_block(guild=int.guild):
+            return
+
+        user = int.user
+        logger.info(f"Imagine command by {user} {message[:20]}")
+        try:
+            # embed = discord.Embed(
+            #     description=f"<@{user.id}> wants to imagine! 🤖💬",
+            #     color=discord.Color.green(),
+            # )
+            # embed.add_field(name=user.name, value=message)
+
+            await int.response.send_message(f"Generating image...")
+            response = await int.original_response()
+        except Exception as e:
+            logger.exception(e)
+            await int.response.send_message(
+                f"Failed to start chat {str(e)}", ephemeral=True
+            )
+            return
+
+        # create the thread
+        # thread = await response.create_thread(
+        #     name=f"{ACTIVATE_THREAD_PREFX} {user.name[:20]} {message[:30]}",
+        #     slowmode_delay=1,
+        #     reason="gpt-bot",
+        #     auto_archive_duration=60,
+        # )
+        # prepare the initial system message
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        system_message = SYSTEM_MESSAGE.format(
+            knowledge_cutoff=KNOWLEDGE_CUTOFF,
+            current_date=current_date
+        )
+        # fetch completion
+        messages = [
+            Message(user='system', text=system_message),
+            Message(user='user', text=message)
+        ]
+        response_data = await generate_image_response(
+            prompt=messages[-1]
+        )
+        # send the result
+        await process_image_response(int.channel, response_data)
+        
+
+    except Exception as e:
+        logger.exception(e)
+        await int.response.send_message(
+            f"Failed to start chat {str(e)}", ephemeral=True
+        )
 
 
 src.alive.keep_alive()
