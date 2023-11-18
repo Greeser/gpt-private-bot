@@ -21,7 +21,7 @@ from src.utils import (
     discord_message_to_message,
 )
 from src.completion import generate_completion_response, process_response
-import discordhealthcheck
+import src.alive
 
 logging.basicConfig(
     format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s", level=logging.INFO
@@ -30,15 +30,7 @@ logging.basicConfig(
 intents = discord.Intents.default()
 intents.message_content = True
 
-class CustomClient(discord.Client):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    async def setup_hook(self):
-        self.healthcheck_server = await discordhealthcheck.start(self, port=8000)
-        # Later you can close or check on self.healthcheck_server
-
-client = CustomClient(intents=intents)
+client = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
 
@@ -204,4 +196,5 @@ async def on_message(message: DiscordMessage):
         logger.exception(e)
 
 
+src.alive.keep_alive()
 client.run(DISCORD_BOT_TOKEN)
