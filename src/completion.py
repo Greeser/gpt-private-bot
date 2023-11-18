@@ -32,7 +32,7 @@ async def generate_completion_response(
 ) -> CompletionData:
     try:
         async with aiohttp.ClientSession() as session:
-            messages = [message.render() for message in messages]
+            messages = [{"role": "user", "content": message.render()} for message in messages]
             async with session.post(
                     url=OPENAI_API_URL,
                     json={
