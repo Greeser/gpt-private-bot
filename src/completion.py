@@ -67,7 +67,7 @@ async def generate_image_response(
                     json={
                         'prompt': prompt,
                         'n': 1,
-                        'size': '256x256',
+                        'size': '1024x1024',
                         'response_format': 'b64_json',
                         'model': DALLE_MODEL
                     },
