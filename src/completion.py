@@ -6,7 +6,7 @@ import discord
 import aiohttp
 from src.base import Message
 from src.utils import split_into_shorter_messages, logger, close_thread, discord_image
-from src.constants import OPENAI_API_KEY, OPENAI_API_URL, OPENAI_MODEL, MAX_CHARS_PER_REPLY_MSG, DALLE_API_URL
+from src.constants import OPENAI_API_KEY, OPENAI_API_URL, OPENAI_MODEL, MAX_CHARS_PER_REPLY_MSG, DALLE_API_URL, DALLE_MODEL
 
 
 class CompletionResult(Enum):
@@ -68,7 +68,8 @@ async def generate_image_response(
                         'prompt': prompt,
                         'n': 1,
                         'size': '256x256',
-                        'response_format': 'b64_json'
+                        'response_format': 'b64_json',
+                        'model': DALLE_MODEL
                     },
                     auth=aiohttp.BasicAuth("", OPENAI_API_KEY)
                     ) as r:
